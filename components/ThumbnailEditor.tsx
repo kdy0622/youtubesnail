@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ThumbnailStrategy } from '../types';
 import { toPng } from 'html-to-image';
-import { Download, Type as TypeIcon, Move, Sun, Loader2, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Download, Type as TypeIcon, AlignLeft, AlignCenter, AlignRight, Loader2 } from 'lucide-react';
 
 interface Props {
   strategy: ThumbnailStrategy;
@@ -17,52 +17,24 @@ const FONTS = [
   { name: '도현체', value: 'Do Hyeon' },
   { name: '주아체', value: 'Jua' },
   { name: '나눔브러쉬', value: 'Nanum Brush Script' },
-  { name: '나눔펜', value: 'Nanum Pen Script' },
-  { name: '고운돋움', value: 'Gowun Dodum' },
   { name: '싱글데이', value: 'Single Day' },
 ];
 
 const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
   
   const [title, setTitle] = useState(strategy.title);
   const [subtitle, setSubtitle] = useState(strategy.subtitle);
   const [badge, setBadge] = useState(strategy.badge);
   
-  const [groupX, setGroupX] = useState(10);
+  const [groupX, setGroupX] = useState(50);
   const [groupY, setGroupY] = useState(50);
-  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('left');
-
-  const [titleScale, setTitleScale] = useState(10);
-  const [titleColor, setTitleColor] = useState('#FFFFFF');
-  const [titleFont, setTitleFont] = useState('Pretendard');
-
-  const [subScale, setSubScale] = useState(4.5);
-  const [subColor, setSubColor] = useState('#FFD700');
-  const [subFont, setSubFont] = useState('Pretendard');
-
-  const [brightness, setBrightness] = useState(70);
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
+  const [titleScale, setTitleScale] = useState(12);
+  const [titleFont, setTitleFont] = useState('Black Han Sans');
+  const [brightness, setBrightness] = useState(60);
   const [canvasWidth, setCanvasWidth] = useState(800);
-  const [portalElement, setPortalElement] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    const updateContainer = () => {
-      const container = document.getElementById('large-preview-container');
-      if (container) {
-        setPortalElement(container);
-        setCanvasWidth(container.offsetWidth - 32 || 800);
-      }
-    };
-
-    updateContainer();
-    const timer = setInterval(updateContainer, 500); // 주기적으로 체크하여 백지 현상 방지
-    
-    window.addEventListener('resize', updateContainer);
-    return () => {
-      window.removeEventListener('resize', updateContainer);
-      clearInterval(timer);
-    };
-  }, []);
 
   useEffect(() => {
     setTitle(strategy.title);
@@ -70,95 +42,98 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
     setBadge(strategy.badge);
   }, [strategy]);
 
-  const computedTitleSize = useMemo(() => (canvasWidth * titleScale) / 100, [canvasWidth, titleScale]);
-  const computedSubSize = useMemo(() => (canvasWidth * subScale) / 100, [canvasWidth, subScale]);
-  const computedBadgeSize = useMemo(() => (canvasWidth * 4.2) / 100, [canvasWidth]);
+  useEffect(() => {
+    const update = () => {
+      const node = document.getElementById('large-preview-container');
+      if (node) {
+        setPortalNode(node);
+        setCanvasWidth(node.clientWidth);
+      }
+    };
+    update();
+    const interval = setInterval(update, 500);
+    window.addEventListener('resize', update);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
 
-  const downloadImage = async () => {
+  const tSize = useMemo(() => (canvasWidth * titleScale) / 100, [canvasWidth, titleScale]);
+  const sSize = useMemo(() => tSize * 0.45, [tSize]);
+
+  const save = async () => {
     if (!canvasRef.current) return;
     try {
-      const dataUrl = await toPng(canvasRef.current, { 
-        width: 1920,
-        height: 1080,
-        style: { width: '1920px', height: '1080px', transform: 'none' }
-      });
-      const link = document.createElement('a');
-      link.download = `thumb_${Date.now()}.png`;
-      link.href = dataUrl;
-      link.click();
-    } catch (err) {
-      alert('다운로드 중 오류가 발생했습니다.');
-    }
+      const data = await toPng(canvasRef.current, { width: 1920, height: 1080 });
+      const a = document.createElement('a');
+      a.download = `youtube_thumb.png`;
+      a.href = data;
+      a.click();
+    } catch (e) { alert('저장 실패'); }
   };
 
-  const canvasContent = (
+  const artboard = (
     <div 
       ref={canvasRef}
-      className="relative aspect-video w-full shadow-2xl overflow-hidden rounded-xl bg-black"
+      className="relative w-full aspect-video bg-black overflow-hidden flex items-center justify-center"
+      style={{ fontSize: `${canvasWidth / 100}px` }}
     >
-      {isImageLoading ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-50">
-           <Loader2 className="w-10 h-10 animate-spin text-red-500 mb-2" />
-           <p className="text-white font-bold">배경 생성 중...</p>
+      {isImageLoading && (
+        <div className="absolute inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center text-white">
+          <Loader2 className="animate-spin mb-2" size={40} />
+          <p className="font-bold">AI 이미지 생성 중...</p>
         </div>
-      ) : bgImage ? (
+      )}
+      
+      {bgImage ? (
         <img 
           src={bgImage} 
-          className="absolute inset-0 w-full h-full object-cover" 
-          alt="BG"
+          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000" 
           style={{ filter: `brightness(${brightness}%)` }}
         />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-black"></div>
+        <div className="absolute inset-0 bg-gradient-to-tr from-black via-gray-900 to-red-900" style={{ filter: `brightness(${brightness}%)` }} />
       )}
       
       <div 
-        className="absolute flex flex-col"
+        className="absolute w-full px-10 pointer-events-none"
         style={{ 
-          left: `${groupX}%`,
-          top: `${groupY}%`,
-          transform: `translate(${textAlign === 'left' ? '0' : textAlign === 'right' ? '-100%' : '-50%'}, -50%)`,
-          width: 'max-content',
-          maxWidth: '85%',
+          left: `${groupX}%`, 
+          top: `${groupY}%`, 
+          transform: `translate(-${groupX}%, -${groupY}%)`,
           textAlign: textAlign,
-          alignItems: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
-          gap: `${computedTitleSize * 0.15}px`,
-          zIndex: 20
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center'
         }}
       >
-        <div 
+        <h2 
+          className="font-black leading-[1.1] mb-2 drop-shadow-2xl"
           style={{ 
-            fontSize: `${computedTitleSize}px`, 
-            color: titleColor,
-            fontFamily: titleFont,
-            fontWeight: '900',
-            lineHeight: 1.1,
-            textShadow: `0 ${computedTitleSize*0.05}px ${computedTitleSize*0.12}px rgba(0,0,0,0.9)`,
-            whiteSpace: 'pre-wrap'
+            fontSize: `${tSize}px`, 
+            fontFamily: titleFont, 
+            color: 'white',
+            textShadow: '0 0.1em 0.2em rgba(0,0,0,0.8)'
           }}
         >
           {title}
-        </div>
-        <div 
+        </h2>
+        <p 
+          className="font-bold drop-shadow-lg"
           style={{ 
-            fontSize: `${computedSubSize}px`, 
-            color: subColor,
-            fontFamily: subFont,
-            fontWeight: '700',
-            textShadow: `0 2px 8px rgba(0,0,0,0.8)`,
-            whiteSpace: 'pre-wrap'
+            fontSize: `${sSize}px`, 
+            color: '#FFD700',
+            textShadow: '0 2px 4px rgba(0,0,0,0.5)'
           }}
         >
           {subtitle}
-        </div>
+        </p>
       </div>
 
       {badge && (
-        <div 
-          className="absolute top-[6%] left-[6%] z-30"
-          style={{ fontSize: `${computedBadgeSize}px` }}
-        >
-          <span className="bg-red-600 text-white px-[0.8em] py-[0.2em] rounded-[0.2em] font-black shadow-xl border border-white">
+        <div className="absolute top-[8%] left-[8%]">
+          <span className="bg-red-600 text-white px-4 py-1 rounded-lg font-black italic border-2 border-white shadow-2xl" style={{ fontSize: `${tSize * 0.3}px` }}>
             {badge}
           </span>
         </div>
@@ -168,56 +143,50 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
 
   return (
     <div className="space-y-6">
-      {portalElement && createPortal(canvasContent, portalElement)}
+      {portalNode && createPortal(artboard, portalNode)}
 
-      <div className="bg-white rounded-2xl shadow-lg border p-6 space-y-6">
-        <button 
-          onClick={downloadImage}
-          className="w-full bg-black hover:bg-red-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-        >
-          <Download size={20} /> 이미지 다운로드
-        </button>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between border-b pb-1">
-            <span className="font-bold flex items-center gap-2"><TypeIcon size={16}/> 텍스트 편집</span>
-            <div className="flex bg-gray-100 rounded p-1 scale-90">
-              <button onClick={() => setTextAlign('left')} className={`p-1 ${textAlign === 'left' ? 'bg-white shadow rounded' : ''}`}><AlignLeft size={14}/></button>
-              <button onClick={() => setTextAlign('center')} className={`p-1 ${textAlign === 'center' ? 'bg-white shadow rounded' : ''}`}><AlignCenter size={14}/></button>
-              <button onClick={() => setTextAlign('right')} className={`p-1 ${textAlign === 'right' ? 'bg-white shadow rounded' : ''}`}><AlignRight size={14}/></button>
-            </div>
-          </div>
-          
+      <div className="bg-white rounded-3xl shadow-xl p-6 border border-gray-100 space-y-6">
+        <div>
+          <label className="text-xs font-black text-gray-400 uppercase mb-3 block tracking-widest">텍스트 내용</label>
           <textarea 
-            value={title} onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-3 text-sm border rounded-lg bg-gray-50 outline-none"
+            value={title} 
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full p-4 bg-gray-50 rounded-2xl border-none text-sm font-bold outline-none focus:ring-2 focus:ring-red-500"
             rows={2}
           />
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400">제목 크기</label>
-              <input type="range" min="5" max="20" step="0.5" value={titleScale} onChange={(e) => setTitleScale(parseFloat(e.target.value))} className="w-full" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400">제목 폰트</label>
-              <select value={titleFont} onChange={(e) => setTitleFont(e.target.value)} className="w-full p-1 text-xs border rounded">
-                {FONTS.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}
-              </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-gray-400">정렬</label>
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button onClick={() => setTextAlign('left')} className={`flex-1 p-2 rounded-lg flex justify-center ${textAlign === 'left' ? 'bg-white shadow' : ''}`}><AlignLeft size={16}/></button>
+              <button onClick={() => setTextAlign('center')} className={`flex-1 p-2 rounded-lg flex justify-center ${textAlign === 'center' ? 'bg-white shadow' : ''}`}><AlignCenter size={16}/></button>
+              <button onClick={() => setTextAlign('right')} className={`flex-1 p-2 rounded-lg flex justify-center ${textAlign === 'right' ? 'bg-white shadow' : ''}`}><AlignRight size={16}/></button>
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400">위치 가로 (%)</label>
-              <input type="range" min="0" max="100" value={groupX} onChange={(e) => setGroupX(parseInt(e.target.value))} className="w-full" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400">배경 밝기</label>
-              <input type="range" min="0" max="100" value={brightness} onChange={(e) => setBrightness(parseInt(e.target.value))} className="w-full" />
-            </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-gray-400">폰트</label>
+            <select value={titleFont} onChange={(e) => setTitleFont(e.target.value)} className="w-full p-2 bg-gray-100 rounded-xl text-xs font-bold border-none outline-none">
+              {FONTS.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}
+            </select>
           </div>
         </div>
+
+        <div className="space-y-4">
+          <div className="flex justify-between text-[10px] font-bold text-gray-400">
+             <span>배경 밝기</span>
+             <span>제목 크기</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <input type="range" min="20" max="100" value={brightness} onChange={(e) => setBrightness(parseInt(e.target.value))} className="w-full accent-red-600" />
+            <input type="range" min="5" max="25" step="0.5" value={titleScale} onChange={(e) => setTitleScale(parseFloat(e.target.value))} className="w-full accent-red-600" />
+          </div>
+        </div>
+
+        <button onClick={save} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-black transition-all">
+          <Download size={20} /> 이미지 저장하기
+        </button>
       </div>
     </div>
   );
