@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { ThumbnailStrategy, HistoryItem } from './types';
 import StrategyCard from './components/StrategyCard';
@@ -12,15 +12,27 @@ const App: React.FC = () => {
   const [result, setResult] = useState<ThumbnailStrategy | null>(null);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  // 컴포넌트가 클라이언트 사이드에서 완전히 마운트되었는지 확인
+  useEffect(() => {
+    setIsReady(true);
+  }, []);
 
   const generateEverything = async () => {
     if (!input.trim()) return;
 
+    // API Key 체크 (브라우저 환경에서의 안전한 접근)
+    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
+    if (!apiKey) {
+      alert("API 키가 설정되지 않았습니다. 환경 변수를 확인해주세요.");
+      return;
+    }
+
     setLoading(true);
     setGeneratedImageUrl(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      const ai = new GoogleGenAI({ apiKey });
       
       // 1. Generate Text Strategy
       const textResponse = await ai.models.generateContent({
@@ -63,10 +75,14 @@ const App: React.FC = () => {
         }
       });
 
-      for (const part of imageResponse.candidates[0].content.parts) {
-        if (part.inlineData) {
-          setGeneratedImageUrl(`data:image/png;base64,${part.inlineData.data}`);
-          break;
+      let imageUrl = null;
+      if (imageResponse.candidates?.[0]?.content?.parts) {
+        for (const part of imageResponse.candidates[0].content.parts) {
+          if (part.inlineData) {
+            imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+            setGeneratedImageUrl(imageUrl);
+            break;
+          }
         }
       }
       
@@ -80,11 +96,13 @@ const App: React.FC = () => {
 
     } catch (error) {
       console.error("Generation failed:", error);
-      alert("생성 중 오류가 발생했습니다. 다시 시도해주세요.");
+      alert("생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }
   };
+
+  if (!isReady) return null; // Hydration 이슈 방지
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-8">
@@ -148,33 +166,35 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Right Column: Large Preview Canvas */}
+        {/* Right Column: Large Preview Canvas Mount Point */}
         <div className="lg:col-span-7 sticky top-8">
-          {result ? (
-            <div className="space-y-4 animate-in fade-in duration-700">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">실시간 고해상도 미리보기</h2>
-                <div className="flex gap-2">
-                  <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">LIVE PREVIEW</span>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between min-h-[40px]">
+              {result && (
+                <>
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">실시간 고해상도 미리보기</h2>
+                  <div className="flex gap-2">
+                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">LIVE PREVIEW</span>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div id="large-preview-container" className={`w-full bg-white rounded-3xl p-4 shadow-2xl border border-gray-100 min-h-[400px] transition-all duration-500 ${!result ? 'hidden' : 'block'}`}>
+               <div className="text-center py-2 border-b border-gray-50 mb-4">
+                 <p className="text-xs text-gray-400 font-medium tracking-tighter">다운로드 시 최적화된 1080p 고화질로 저장됩니다.</p>
+               </div>
+            </div>
+
+            {!result && (
+              <div className="h-[600px] rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-white shadow-inner animate-in fade-in duration-500">
+                <div className="bg-gray-50 p-10 rounded-full mb-6">
+                  <Youtube size={80} className="text-gray-200" />
                 </div>
+                <p className="text-xl font-medium text-gray-400">분석을 시작하면 우측에<br/><span className="text-red-500 font-bold underline decoration-2 underline-offset-4">대형 썸네일 캔버스</span>가 활성화됩니다.</p>
               </div>
-              
-              <div id="large-preview-container" className="w-full bg-white rounded-3xl p-4 shadow-2xl border border-gray-100">
-                 {/* The canvas is rendered within ThumbnailEditor and moved here via the layout */}
-                 <div className="text-center py-2 border-b border-gray-50 mb-4">
-                   <p className="text-xs text-gray-400 font-medium tracking-tighter">다운로드 시 최적화된 1080p 고화질로 저장됩니다.</p>
-                 </div>
-                 {/* This container serves as the mount point for visual consistency */}
-              </div>
-            </div>
-          ) : (
-            <div className="h-[650px] rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-white shadow-inner">
-              <div className="bg-gray-50 p-10 rounded-full mb-6">
-                <Youtube size={80} className="text-gray-200" />
-              </div>
-              <p className="text-xl font-medium text-gray-400">분석을 시작하면 우측에<br/><span className="text-red-500 font-bold underline decoration-2 underline-offset-4">대형 썸네일 캔버스</span>가 활성화됩니다.</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

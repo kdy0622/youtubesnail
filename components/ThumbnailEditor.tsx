@@ -54,20 +54,20 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
       const container = document.getElementById('large-preview-container');
       if (container) {
         setPortalElement(container);
-        setCanvasWidth(container.offsetWidth > 0 ? container.offsetWidth : 800);
+        const w = container.offsetWidth;
+        if (w > 0) setCanvasWidth(w - 32);
       }
     };
 
-    // 초기 실행 및 약간의 지연 후 재확인 (DOM 렌더링 보장)
     updateContainer();
-    const timer = setTimeout(updateContainer, 100);
+    const timer = setTimeout(updateContainer, 200); // 렌더링 완료를 위해 넉넉히 지연
     
     window.addEventListener('resize', updateContainer);
     return () => {
       window.removeEventListener('resize', updateContainer);
       clearTimeout(timer);
     };
-  }, [strategy]); // strategy 변경 시마다 컨테이너 재확인
+  }, [strategy, bgImage]); // 배경이나 전략이 바뀔 때 컨테이너 다시 확인
 
   useEffect(() => {
     setTitle(strategy.title);
@@ -97,6 +97,7 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
       link.click();
     } catch (err) {
       console.error('Download failed', err);
+      alert('이미지 다운로드에 실패했습니다.');
     }
   };
 
@@ -178,11 +179,11 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
 
   return (
     <div className="space-y-6">
-      {/* Portal Container */}
+      {/* Portal Container - 렌더링 안정성을 위해 portalElement 존재 확인 필수 */}
       {portalElement && createPortal(canvasContent, portalElement)}
 
       {/* Editing Sidebar */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 space-y-8">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 space-y-8 animate-in fade-in duration-300">
         <button 
           onClick={downloadImage}
           className="w-full bg-black hover:bg-red-600 text-white py-4 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95"
