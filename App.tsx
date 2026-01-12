@@ -2,9 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { ThumbnailStrategy, HistoryItem } from './types';
-import StrategyCard from './components/StrategyCard';
 import ThumbnailEditor from './components/ThumbnailEditor';
-import { Sparkles, History, Youtube, Loader2, Trash2, Edit3 } from 'lucide-react';
+import { Sparkles, History, Youtube, Loader2, Edit3 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [input, setInput] = useState('');
@@ -14,7 +13,6 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isReady, setIsReady] = useState(false);
 
-  // 컴포넌트가 클라이언트 사이드에서 완전히 마운트되었는지 확인
   useEffect(() => {
     setIsReady(true);
   }, []);
@@ -22,10 +20,11 @@ const App: React.FC = () => {
   const generateEverything = async () => {
     if (!input.trim()) return;
 
-    // API Key 체크 (브라우저 환경에서의 안전한 접근)
-    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
-    if (!apiKey) {
-      alert("API 키가 설정되지 않았습니다. 환경 변수를 확인해주세요.");
+    // API Key가 환경 변수에서 제대로 로드되지 않을 경우를 대비한 안전 로직
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey || apiKey === 'undefined') {
+      alert("API 키를 찾을 수 없습니다. 설정 환경을 확인해주세요.");
       return;
     }
 
@@ -34,9 +33,9 @@ const App: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey });
       
-      // 1. Generate Text Strategy
+      // 1. Generate Text Strategy (안정성을 위해 flash 모델 권장)
       const textResponse = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: `Analyze content and provide YouTube thumbnail strategy.\n\nContent: ${input}`,
         config: {
           systemInstruction: `You are a YouTube CTR Strategist. Rules:
@@ -44,7 +43,7 @@ const App: React.FC = () => {
           - Subtitle: Supporting explanation in Korean.
           - Badge: Impactful short text in Korean.
           - Image Prompt: Detailed English description for a background vibe (cinematic, high quality, background only).
-          Output JSON.`,
+          Output JSON strictly.`,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -94,30 +93,34 @@ const App: React.FC = () => {
       };
       setHistory(prev => [newHistoryItem, ...prev]);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Generation failed:", error);
-      alert("생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      // API 할당량 초과(429)나 권한 오류(403) 등을 사용자에게 알림
+      if (error.message?.includes('429')) {
+        alert("API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.");
+      } else {
+        alert("분석 중 오류가 발생했습니다. 입력 내용을 확인하거나 잠시 후 다시 시도해주세요.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isReady) return null; // Hydration 이슈 방지
+  if (!isReady) return <div className="min-h-screen bg-gray-50"></div>;
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-8">
-      <header className="text-center mb-8">
+      <header className="text-center mb-8 animate-in fade-in duration-700">
         <div className="flex justify-center items-center gap-2 mb-2">
           <Youtube className="text-red-600 w-8 h-8" />
           <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
             썸네일 <span className="gradient-text">만들기</span>
           </h1>
         </div>
-        <p className="text-gray-500">AI가 제안하는 전략으로 고효율 썸네일을 즉시 제작하세요.</p>
+        <p className="text-gray-500">AI 전략가와 함께 클릭을 부르는 디자인을 시작하세요.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Input + Editing Tools */}
         <div className="lg:col-span-5 space-y-6">
           <section className="glass-card rounded-2xl p-6 shadow-xl border-t-4 border-t-red-500">
             <div className="mb-4">
@@ -125,8 +128,8 @@ const App: React.FC = () => {
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="영상의 핵심 내용을 입력하면 AI가 전략을 세워줍니다..."
-                className="w-full h-24 p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-red-500 outline-none resize-none text-gray-800 text-sm"
+                placeholder="영상의 핵심 내용을 입력하세요..."
+                className="w-full h-24 p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-red-500 outline-none resize-none text-gray-800 text-sm transition-all"
               />
             </div>
             <button
@@ -141,7 +144,7 @@ const App: React.FC = () => {
 
           {result && (
             <div className="animate-in slide-in-from-left duration-500 space-y-6">
-              <div className="flex items-center gap-2 text-xl font-bold text-gray-800">
+              <div className="flex items-center gap-2 text-xl font-bold text-gray-800 px-1">
                 <Edit3 size={20} className="text-red-500" /> 디자인 편집 도구
               </div>
               <ThumbnailEditor strategy={result} bgImage={generatedImageUrl} isImageLoading={loading && !generatedImageUrl} />
@@ -149,7 +152,7 @@ const App: React.FC = () => {
           )}
 
           {history.length > 0 && (
-            <section>
+            <section className="px-1">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="font-bold flex items-center gap-2 text-gray-500"><History size={18} /> 최근 히스토리</h2>
                 <button onClick={() => setHistory([])} className="text-xs text-gray-400 hover:text-red-500">전체 삭제</button>
@@ -166,15 +169,14 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Right Column: Large Preview Canvas Mount Point */}
         <div className="lg:col-span-7 sticky top-8">
           <div className="space-y-4">
             <div className="flex items-center justify-between min-h-[40px]">
               {result && (
                 <>
-                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">실시간 고해상도 미리보기</h2>
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">실시간 미리보기</h2>
                   <div className="flex gap-2">
-                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">LIVE PREVIEW</span>
+                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">16:9 HD</span>
                   </div>
                 </>
               )}
@@ -191,7 +193,7 @@ const App: React.FC = () => {
                 <div className="bg-gray-50 p-10 rounded-full mb-6">
                   <Youtube size={80} className="text-gray-200" />
                 </div>
-                <p className="text-xl font-medium text-gray-400">분석을 시작하면 우측에<br/><span className="text-red-500 font-bold underline decoration-2 underline-offset-4">대형 썸네일 캔버스</span>가 활성화됩니다.</p>
+                <p className="text-xl font-medium text-gray-400">콘텐츠 요약을 입력하고 분석을 시작하세요!</p>
               </div>
             )}
           </div>
