@@ -31,15 +31,13 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
   const [subtitle, setSubtitle] = useState(strategy.subtitle);
   const [badge, setBadge] = useState(strategy.badge);
   
-  // Group Position (Moving both title and subtitle together)
-  const [groupX, setGroupX] = useState(10); // Default Left (10%)
-  const [groupY, setGroupY] = useState(50); // Default Center Vertical (50%)
+  const [groupX, setGroupX] = useState(10);
+  const [groupY, setGroupY] = useState(50);
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('left');
 
-  // Individual Scales
   const [titleScale, setTitleScale] = useState(10);
   const [titleColor, setTitleColor] = useState('#FFFFFF');
-  const [titleFont, setTitleFont] = useState('Pretendard'); // Default Font set to Pretendard
+  const [titleFont, setTitleFont] = useState('Pretendard');
 
   const [subScale, setSubScale] = useState(4.5);
   const [subColor, setSubColor] = useState('#FFD700');
@@ -48,27 +46,33 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
   const [brightness, setBrightness] = useState(70);
   const [bgColor, setBgColor] = useState('#000000');
 
-  const [canvasWidth, setCanvasWidth] = useState(1280);
+  const [canvasWidth, setCanvasWidth] = useState(800);
   const [portalElement, setPortalElement] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const updateSize = () => {
+    const updateContainer = () => {
       const container = document.getElementById('large-preview-container');
       if (container) {
-        setCanvasWidth(container.offsetWidth - 32);
         setPortalElement(container);
+        setCanvasWidth(container.offsetWidth > 0 ? container.offsetWidth : 800);
       }
     };
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, []);
+
+    // 초기 실행 및 약간의 지연 후 재확인 (DOM 렌더링 보장)
+    updateContainer();
+    const timer = setTimeout(updateContainer, 100);
+    
+    window.addEventListener('resize', updateContainer);
+    return () => {
+      window.removeEventListener('resize', updateContainer);
+      clearTimeout(timer);
+    };
+  }, [strategy]); // strategy 변경 시마다 컨테이너 재확인
 
   useEffect(() => {
     setTitle(strategy.title);
     setSubtitle(strategy.subtitle);
     setBadge(strategy.badge);
-    // Reset positions for best default experience
     setGroupX(10);
     setGroupY(50);
     setTextAlign('left');
@@ -105,7 +109,7 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
       {isImageLoading ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-50">
            <Loader2 className="w-12 h-12 animate-spin text-red-500 mb-4" />
-           <p className="text-white font-black text-xl">배경 생성 중...</p>
+           <p className="text-white font-black text-xl text-center px-4">AI가 배경을 생성하고 있습니다...</p>
         </div>
       ) : bgImage ? (
         <img 
@@ -116,7 +120,6 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
         />
       ) : null}
       
-      {/* Text Group Container - Moves Together */}
       <div 
         className="absolute flex flex-col pointer-events-none"
         style={{ 
@@ -127,11 +130,10 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
           maxWidth: '85%',
           textAlign: textAlign,
           alignItems: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
-          gap: `${computedTitleSize * 0.2}px`, // Fixed ratio gap to prevent overlapping
+          gap: `${computedTitleSize * 0.15}px`,
           zIndex: 20
         }}
       >
-        {/* Title */}
         <div 
           style={{ 
             fontSize: `${computedTitleSize}px`, 
@@ -146,7 +148,6 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
           {title}
         </div>
 
-        {/* Subtitle */}
         <div 
           style={{ 
             fontSize: `${computedSubSize}px`, 
@@ -162,7 +163,6 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
         </div>
       </div>
 
-      {/* Badge */}
       {badge && (
         <div 
           className="absolute top-[6%] left-[6%] z-30 pointer-events-none"
@@ -178,9 +178,11 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
 
   return (
     <div className="space-y-6">
+      {/* Portal Container */}
       {portalElement && createPortal(canvasContent, portalElement)}
 
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 space-y-8 animate-in slide-in-from-left duration-300">
+      {/* Editing Sidebar */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 space-y-8">
         <button 
           onClick={downloadImage}
           className="w-full bg-black hover:bg-red-600 text-white py-4 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95"
@@ -205,12 +207,11 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
               value={title} onChange={(e) => setTitle(e.target.value)}
               className="w-full p-3 text-sm border rounded-xl bg-gray-50 focus:ring-2 focus:ring-red-400 outline-none font-medium"
               rows={2}
-              placeholder="제목 입력"
             />
             <input 
               value={subtitle} onChange={(e) => setSubtitle(e.target.value)}
               className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 focus:ring-2 focus:ring-red-400 outline-none"
-              placeholder="부제목 입력"
+              placeholder="부제목"
             />
 
             <div className="grid grid-cols-2 gap-4">
@@ -221,17 +222,6 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-gray-400">제목 색상</label>
                 <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} className="w-full h-8 rounded-lg cursor-pointer border-none" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-400">부제목 크기 (%)</label>
-                <input type="range" min="2" max="10" step="0.1" value={subScale} onChange={(e) => setSubScale(parseFloat(e.target.value))} className="w-full accent-yellow-500" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-400">부제목 색상</label>
-                <input type="color" value={subColor} onChange={(e) => setSubColor(e.target.value)} className="w-full h-8 rounded-lg cursor-pointer border-none" />
               </div>
             </div>
 
@@ -247,11 +237,11 @@ const ThumbnailEditor: React.FC<Props> = ({ strategy, bgImage, isImageLoading })
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-400 flex items-center gap-1"><Move size={10}/> 전체 가로축 (%)</label>
+                <label className="text-[11px] font-bold text-gray-400 flex items-center gap-1"><Move size={10}/> 가로축 (%)</label>
                 <input type="range" min="0" max="100" value={groupX} onChange={(e) => setGroupX(parseInt(e.target.value))} className="w-full accent-gray-600" />
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-400 flex items-center gap-1"><Move size={10}/> 전체 세로축 (%)</label>
+                <label className="text-[11px] font-bold text-gray-400 flex items-center gap-1"><Move size={10}/> 세로축 (%)</label>
                 <input type="range" min="0" max="100" value={groupY} onChange={(e) => setGroupY(parseInt(e.target.value))} className="w-full accent-gray-600" />
               </div>
             </div>
